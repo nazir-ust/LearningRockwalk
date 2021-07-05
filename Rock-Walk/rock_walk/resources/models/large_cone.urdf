@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<robot name="LargeCone">
+
+
+  <link name="cone">
+    <inertial>
+      <mass value="1.04"/>
+      <!-- <mass value="1.80"/> -->
+      <origin xyz="0.0 -0.15 0.29"/>
+      <inertia ixx="0.21" ixy="0." ixz="0." iyy="0.20" iyz="-0.05" izz="0.09"/>
+    </inertial>
+
+    <contact>
+      <lateral_friction value="0.4"/>
+      <!-- <rolling_friction value="0.001"/> -->
+      <!-- <stiffness value="30000"/> -->
+      <!-- <damping value="1000"/> -->
+    </contact>
+
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="mesh/large_cone.obj"/>
+      </geometry>
+    </visual>
+
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="mesh/large_cone_vhacd.obj"/>
+      </geometry>
+    </collision>
+
+  </link>
+
+</robot>
