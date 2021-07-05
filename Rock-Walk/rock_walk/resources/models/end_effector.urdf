@@ -1,0 +1,75 @@
+<?xml version="1.0"?>
+<robot name="EndEffector">
+
+  <link name="base_link">
+    <inertial>
+      <mass value="0.0001"/>
+      <origin xyz="0.0 0.0 0.0"/>
+      <inertia ixx="1e-10" ixy="0." ixz="0." iyy="1e-10" iyz="0." izz="1e-10"/>
+    </inertial>
+  </link>
+
+  <link name="base_x_link">
+    <inertial>
+      <mass value="0.0001"/>
+      <origin xyz="0.0 0.0 0.0"/>
+      <inertia ixx="1e-10" ixy="0." ixz="0." iyy="1e-10" iyz="0." izz="1e-10"/>
+    </inertial>
+  </link>
+
+  <link name="base_y_link">
+    <inertial>
+      <mass value="0.0001"/>
+      <origin xyz="0.0 0.0 0.0"/>
+      <inertia ixx="1e-10" ixy="0." ixz="0." iyy="1e-10" iyz="0." izz="1e-10"/>
+    </inertial>
+  </link>
+
+  <link name="eef_link">
+    <inertial>
+      <mass value="0.032"/>
+      <origin xyz="0.0 0.0 0.0"/>
+      <inertia ixx="18.193e-6" ixy="0." ixz="0." iyy="18.193e-6" iyz="0." izz="35.848e-6"/>
+    </inertial>
+    <contact>
+      <lateral_friction value="0.1"/>
+      <!-- <rolling_friction value="0.001"/> -->
+      <!-- <stiffness value="30000"/> -->
+      <!-- <damping value="1000"/> -->
+    </contact>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="mesh/end_effector.obj"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="mesh/end_effector_vhacd.obj"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="joint_basex" type="prismatic">
+    <axis xyz="1 0 0"/>
+    <parent link="base_link"/>
+    <child link="base_x_link"/>
+    <limit lower="-100" upper="100"/>
+  </joint>
+
+  <joint name="joint_basey" type="prismatic">
+    <axis xyz="0 1 0"/>
+    <parent link="base_x_link"/>
+    <child link="base_y_link"/>
+    <limit lower="-100" upper="100"/>
+  </joint>
+
+  <joint name="joint_basez" type="prismatic">
+    <axis xyz="0 0 1"/>
+    <parent link="base_y_link"/>
+    <child link="eef_link"/>
+    <limit lower="0." upper="5"/>
+  </joint>
+
+</robot>
