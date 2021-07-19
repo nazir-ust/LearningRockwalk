@@ -9,7 +9,6 @@ def transform_to_body_frame(rot_w):
                          [rot_w[3], rot_w[4], rot_w[5]],
                          [rot_w[6], rot_w[7], rot_w[8]]])
 
-
     z_rot = R.from_euler('z', -np.pi/2).as_matrix()
 
     return np.matmul(rot_w_np, z_rot)

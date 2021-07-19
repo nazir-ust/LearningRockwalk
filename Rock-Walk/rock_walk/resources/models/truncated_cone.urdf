@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<robot name="LargeCone">
+
+  <!-- Colors -->
+  <material name="brown">
+      <color rgba="0.87058824 0.72156863 0.52941176 1"/>
+  </material>
+
+  <link name="cone">
+    <inertial>
+      <mass value="1.0"/>
+      <!-- <mass value="1.80"/> -->
+      <origin xyz="0.003 -0.054 0.5404"/>
+      <inertia ixx="166655.046e-6" ixy="-0.357e-6" ixz="0.479e-6" iyy="165103.779e-6" iyz="15539.837e-6" izz="20954.613e-6"/>
+    </inertial>
+
+    <contact>
+      <lateral_friction value="0.4"/>
+      <!-- <rolling_friction value="0.001"/> -->
+      <!-- <stiffness value="30000"/> -->
+      <!-- <damping value="1000"/> -->
+    </contact>
+
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="mesh/truncated_cone_final.obj"/>
+      </geometry>
+      <material name="brown"/>
+    </visual>
+
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="mesh/truncated_cone_final.obj"/>
+      </geometry>
+    </collision>
+
+  </link>
+
+</robot>

@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+<robot name="LargeCone">
+
+
+  <material name="gray">
+      <color rgba="0.66 0.66 0.66 1"/>
+  </material>
+
+  <material name="black">
+      <color rgba="0 0 0 1"/>
+  </material>
+
+  <link name="cone">
+    <inertial>
+      <mass value="1.04"/>
+      <!-- <mass value="1.80"/> -->
+      <origin xyz="0.0 0.262339 -1.109297"/>
+      <inertia ixx="0.021472" ixy="0." ixz="0." iyy="0.020527" iyz="0.003975" izz="0.008467"/>
+    </inertial>
+
+    <contact>
+      <lateral_friction value="0.4"/>
+      <!-- <rolling_friction value="0.001"/> -->
+      <!-- <stiffness value="30000"/> -->
+      <!-- <damping value="1000"/> -->
+    </contact>
+
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="mesh/large_cone_convex_apex_frame.obj"/>
+      </geometry>
+      <material name="gray"/>
+    </visual>
+
+    <!-- <visual>
+      <origin rpy="0 0 0" xyz="0 -0.02 -0.74"/>
+      <geometry>
+          <box size="0.01 0.01 1.47" />
+      </geometry>
+      <color rgba="0 1 0 1"/>
+    </visual> -->
+
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="mesh/large_cone_convex_apex_frame.obj"/>
+      </geometry>
+    </collision>
+
+  </link>
+
+
+</robot>
