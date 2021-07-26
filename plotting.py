@@ -12,22 +12,27 @@ class LoadData:
 
 
     def load_all_data(self, filename):
-        data = np.load(filename)
-        self._obs_x = data['obs_x']
-        self._obs_y = data['obs_y']
-        self._obs_psi = data['obs_psi']
-        self._obs_theta = data['obs_theta']
-        self._obs_phi = data['obs_phi']
-        self._obs_x_dot = data['obs_x_dot']
-        self._obs_y_dot = data['obs_y_dot']
-        self._obs_psi_dot = data['obs_psi_dot']
-        self._obs_theta_dot = data['obs_theta_dot']
-        self._obs_phi_dot = data['obs_phi_dot']
+        data = np.loadtxt(filename, delimiter=',', skiprows=1, dtype=np.float64)
 
-        self._action_x = data['action_x']
-        self._action_y = data['action_y']
-        self._time = data['time']
+        self._time = data[:,0]
         self._time = self._time-self._time[0]
+
+        self._obs_x = data[:,1]
+        self._obs_y = data[:,2]
+        self._obs_psi = data[:,3]
+        self._obs_theta = data[:,4]
+        self._obs_phi = data[:,5]
+        self._obs_x_dot = data[:,6]
+        self._obs_y_dot = data[:,7]
+        self._obs_psi_dot = data[:,8]
+        self._obs_theta_dot = data[:,9]
+        self._obs_phi_dot = data[:,10]
+
+        self._cone_energy = data[:,11]
+
+        self._action_x = data[:,12]
+        self._action_y = data[:,13]
+
 
 
     def plot_action_data(self):
@@ -39,10 +44,10 @@ class LoadData:
 
 def main():
 
-    data = LoadData("./sim_data/data.npz")
+    data = LoadData("./test_data/data.txt")
 
     # Create two subplots and unpack the output array immediately
-    fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, sharex=True)
+    fig, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(5, 1, sharex=True)
     fig.set_size_inches(18.5, 10.5)
     ax1.plot(data._time, data._obs_x, label='x_CM')
     ax1.plot(data._time, data._obs_y, label='y_CM')
@@ -57,12 +62,17 @@ def main():
     ax3.set_ylim(-np.pi, np.pi)
     ax3.set_title('Spin angle in radians')
 
-
-    ax4.plot(data._time, data._action_x, label='Vx_C')
-    ax4.plot(data._time, data._action_y, label='Vy_C')
+    ax4.plot(data._time, data._cone_energy, label='Energy of CoM')
+    ax4.plot(data._time, 5*np.ones([np.size(data._time)]), label='upper bound')
+    ax4.set_ylim(3.5,5.5)
     ax4.legend()
-    ax4.set_title('Velocity of control point (i.e apex of the cone) along x- and y-axes in meters per second')
-    ax4.set_xlabel('Time (s)')
+    ax4.set_title('Cone energy')
+
+    ax5.plot(data._time, data._action_x, label='Vx_C')
+    ax5.plot(data._time, data._action_y, label='Vy_C')
+    ax5.legend()
+    ax5.set_title('Actions returned by agent: Velocity of control point long x- and y-axes in meters per second **Actual magnitude is scaled**')
+    ax5.set_xlabel('Time (s)')
     plt.show()
     # plt.show()
     # plt.figure()

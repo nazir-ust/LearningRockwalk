@@ -8,23 +8,22 @@ from rock_walk.resources.utils import *
 
 
 class Cone:
-    def __init__(self, client, yaw_spawn):
-        self.clientID = client
+    def __init__(self, clientID, yaw_spawn):
+        self.clientID = clientID
         self._yaw_spawn = yaw_spawn
         # f_name1 = os.path.join(os.path.dirname(__file__),'models/moai_bm_scaled_down.urdf')
         # f_name3 = os.path.join(os.path.dirname(__file__), 'models/mesh/tex_0.jpg')
         f_name1 = os.path.join(os.path.dirname(__file__),'models/large_cone_apex_control.urdf')
 
+        orientation = bullet.getQuaternionFromEuler([0,0,yaw_spawn],physicsClientId=self.clientID)
         self.coneID = bullet.loadURDF(fileName=f_name1, basePosition=[0, 0, 1.5],
-                                      baseOrientation=bullet.getQuaternionFromEuler([0,0,yaw_spawn]),#([0,0,np.pi/2]),
+                                      baseOrientation=orientation,#([0,0,np.pi/2]),
                                       useFixedBase=1,
-                                      physicsClientId=client)
+                                      physicsClientId=self.clientID)
 
 
         # texID = bullet.loadTexture(f_name3)
         # bullet.changeVisualShape(self.coneID, -1, textureUniqueId=texID, physicsClientId=client)
-
-
 
 
     def get_ids(self):
@@ -43,6 +42,7 @@ class Cone:
 
         action_rot = R.from_euler('z', -self._yaw_spawn).as_matrix()
         action = np.matmul(action_rot, np.array([action[0], action[1], 0]))
+
 
 
         bullet.setJointMotorControl2(self.coneID,
@@ -100,22 +100,24 @@ class Cone:
         return cone_state+np_random.normal(0.0,0.02,10) #0.05
 
 
-    def change_constraint(self):
+# def change_constraint(self):
+#
+#     lin_pos_base_world, quat_base_world = bullet.getBasePositionAndOrientation(self.coneID, self.clientID)
+#     rot_base_world = bullet.getMatrixFromQuaternion(quat_base_world, self.clientID)
+#
+#     rot_base_world_np = np.array([[rot_base_world[0], rot_base_world[1], rot_base_world[2]],
+#                                   [rot_base_world[3], rot_base_world[4], rot_base_world[5]],
+#                                   [rot_base_world[6], rot_base_world[7], rot_base_world[8]]])
+#
+#     apex_vector = np.matmul(rot_base_world_np, np.array([0.0, -0.262339, 1.109297]))
+#
+#     apex_pos_base_world = [lin_pos_base_world[0]+apex_vector[0],
+#                            lin_pos_base_world[1]+apex_vector[1],
+#                            lin_pos_base_world[2]+apex_vector[2]]
+#
+#     bullet.changeConstraint(self.constraintID, apex_pos_base_world, quat_base_world)
 
-        lin_pos_base_world, quat_base_world = bullet.getBasePositionAndOrientation(self.coneID, self.clientID)
-        rot_base_world = bullet.getMatrixFromQuaternion(quat_base_world, self.clientID)
 
-        rot_base_world_np = np.array([[rot_base_world[0], rot_base_world[1], rot_base_world[2]],
-                                      [rot_base_world[3], rot_base_world[4], rot_base_world[5]],
-                                      [rot_base_world[6], rot_base_world[7], rot_base_world[8]]])
-
-        apex_vector = np.matmul(rot_base_world_np, np.array([0.0, -0.262339, 1.109297]))
-
-        apex_pos_base_world = [lin_pos_base_world[0]+apex_vector[0],
-                               lin_pos_base_world[1]+apex_vector[1],
-                               lin_pos_base_world[2]+apex_vector[2]]
-
-        bullet.changeConstraint(self.constraintID, apex_pos_base_world, quat_base_world)
 
 
 # f_name1 = os.path.join(os.path.dirname(__file__),'models/large_cone_apex_control_a.urdf')

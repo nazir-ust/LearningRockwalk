@@ -3,9 +3,11 @@ import math
 import time
 import numpy as np
 import pybullet as bullet
+
 import matplotlib.pyplot as plt
 
-from rock_walk.resources.cone import Cone
+# from rock_walk.resources.cone import Cone
+from rock_walk.resources.trainingObject import TrainObject
 from rock_walk.resources.eef import EndEffector
 from rock_walk.resources.plane import Plane
 from rock_walk.resources.goal import Goal
@@ -13,52 +15,59 @@ from rock_walk.resources.controller import ExpertController
 
 from scipy.spatial.transform import Rotation as R
 
-import pkgutil
-# for rendering with bullet.ER_TINY_RENDERER
-# egl = pkgutil.get_loader('eglRenderer')
-# self._plugin = bullet.loadPlugin(egl.get_filename(), "_eglRendererPlugin")
-
-
 class RockWalkEnv(gym.Env):
 
-    def __init__(self, bullet_connection, step_freq, frame_skip):
-
-        self._desired_nutation = 10
-
+    def __init__(self, bullet_connection, step_freq, frame_skip, isTrain):
         self._bullet_connection = bullet_connection
         self._frame_skip = frame_skip
-        self._ep_timeout = 2.5
-        self._mu_min = 0.2
-        self._mu_max = 2.0 #1.0
+        self._isTrain = isTrain
 
-        action_low = np.array([-0.5, -0.5], dtype=np.float64)
-        action_high = np.array([0.5, 0.5], dtype=np.float64)
+        self._desired_nutation = 25 # in degrees
+
+        self._object_param_file_path = "/home/nazir/learning_rockwalk/learning_moai/training_objects_params.txt"
+        if self._isTrain==True:
+            self._init_object_param = list(np.loadtxt(self._object_param_file_path, delimiter=',', skiprows=1, dtype=np.float64)[-1:].flatten())
+        else:
+            ellipse_params=[0.35,0.35]
+            apex_coordinates=[0,-0.35,1.5]
+            self._init_object_param = ellipse_params + apex_coordinates
+
+        self.bullet_setup(self._bullet_connection)
+        bullet.setTimeStep(1./step_freq, self.clientID)
+
+        self.goal = Goal(self.clientID) # for visualizing the direction of transport.
+        self.plane = Plane(self.clientID) # support surface representing ground
+        self.cone = TrainObject(self.clientID)
+        self.cone.generate_object_mesh(ellipse_params=self._init_object_param[:2],
+                                       apex_coordinates=self._init_object_param[2:], density=10)
+        self.cone.generate_urdf_file()
+
+        action_low = np.array([-1, -1], dtype=np.float64)
+        action_high = np.array([1, 1], dtype=np.float64)
         self.action_space = gym.spaces.box.Box(low=action_low, high=action_high)
 
-        obs_low = np.array([-5, -5, -5, -10, -10, -10], dtype=np.float64)
-        obs_high = np.array([5, 5, 5, 10, 10, 10], dtype=np.float64)
+        obs_low = np.array([-5, -5, -5, -10, -10, -10]+[0,0,-5,-5,-5], dtype=np.float64)
+        obs_high = np.array([5, 5, 5, 10, 10, 10]+[5,5,5,5,5], dtype=np.float64)
         self.observation_space = gym.spaces.box.Box(low=obs_low, high=obs_high)
-
-        self.bullet_setup(bullet_connection)
-        bullet.setTimeStep(1./step_freq, self.clientID)
 
         self.np_random, _ = gym.utils.seeding.np_random() #input seed eg. 0 for repeatability
         self.reset()
 
-
     def step(self, action):
-        duration = time.time()-self.start_time
-        if duration > self._ep_timeout:
-            print("terminated: timout")
-            self.done = True
+        if self._isTrain==True:
+            data = np.loadtxt(self._object_param_file_path, delimiter=',', skiprows=1, dtype=np.float64)
+            object_param = list(data[-1,:])
+            action_scale = self._random_action_scale
+        else:
+            object_param = self._init_object_param
+            action_scale = 0.15
 
-        self.cone.apply_action(action)
+        self.cone.apply_action(action*action_scale)
 
         for _ in range(self._frame_skip):
             bullet.stepSimulation()
 
         true_cone_state, true_cone_te = self.cone.get_observation()
-
         noisy_cone_state = self.cone.get_noisy_observation(self.np_random)
 
         reward = self.set_rewards(true_cone_state, true_cone_te)
@@ -67,19 +76,21 @@ class RockWalkEnv(gym.Env):
             self.adjust_camera_pose()
 
         ob = np.array([noisy_cone_state[2], noisy_cone_state[3], noisy_cone_state[4],
-                       noisy_cone_state[7], noisy_cone_state[8], noisy_cone_state[9]], dtype=np.float64)
+                       noisy_cone_state[7], noisy_cone_state[8], noisy_cone_state[9]]+object_param, dtype=np.float64)
 
         return ob, reward, self.done, dict()
 
 
     def reset(self):
-        self._mu_cone_ground = np.inf #self.np_random.uniform(self._mu_min,self._mu_max)
-        self._yaw_spawn = np.pi/2 #self.np_random.uniform(-np.pi, np.pi) #np.pi/2 #+ self.np_random.uniform(-np.pi/4, np.pi/4)
-
+        self.done = False
         bullet.resetSimulation(self.clientID)
         bullet.setGravity(0, 0, -9.8)
-        self.initialize_physical_objects()
-        self.done = False
+
+        mu_cone_ground = np.inf
+        yaw_spawn = self.np_random.uniform(-np.pi, np.pi) #np.pi/2 + self.np_random.uniform(-np.pi/4, np.pi/4)
+        self._random_action_scale = self.np_random.uniform(0.1, 1.0)
+        self.initialize_physical_objects(yaw_spawn, mu_cone_ground)
+
         self.start_time = time.time()
         if self._bullet_connection == 2:
             self.adjust_camera_pose()
@@ -89,8 +100,14 @@ class RockWalkEnv(gym.Env):
 
         self.prev_x = [true_cone_state[0]]
 
+        if self._isTrain==True:
+            object_param = list(np.loadtxt(self._object_param_file_path, delimiter=',', skiprows=1, dtype=np.float64)[-1:].flatten())
+        else:
+            object_param = self._init_object_param
+
+
         ob = np.array([noisy_cone_state[2], noisy_cone_state[3], noisy_cone_state[4],
-                       noisy_cone_state[7], noisy_cone_state[8], noisy_cone_state[9]], dtype=np.float64)
+                       noisy_cone_state[7], noisy_cone_state[8], noisy_cone_state[9]]+object_param, dtype=np.float64)
 
         return ob
 
@@ -107,30 +124,53 @@ class RockWalkEnv(gym.Env):
             self.done = True
             reward = -50
 
-        elif cone_state[3]>np.radians(45):
-            print("terminated: nutation out of bound")
-            self.done=True
+        elif cone_state[3]>np.radians(60):
+            print("terminated: cone too close to the ground")
+            self.done = True
             reward = -50
 
+        elif cone_state[3]>np.radians(45) or cone_state[3]<np.radians(15):
+            # print("nutation out of bound")
+            reward = -20
+
+        elif cone_te>5.0 or abs(cone_state[4])>np.pi/2:
+            # print("energy exceeded 5 joules")
+            reward = -20
 
         else:
-            # reward = 1000*max(cone_state[0]-self.prev_x[0],0) \
-            reward = 20*np.exp(-(min(0, cone_state[0]-self.prev_x[0]))**2) \
-                    +10*np.exp(-(min(0, cone_te-5.0))**2) + 10*np.exp(-(max(0, cone_te-5.0))**2)
+            reward = 1000*max(cone_state[0]-self.prev_x[0],0)
             self.prev_x = [cone_state[0]]
 
         return reward
 
+    def initialize_physical_objects(self,yaw_spawn,mu_cone_ground):
+        self.goal.load_model_from_urdf()
 
-    def initialize_physical_objects(self):
-        Goal(self.clientID)
-        self.plane = Plane(self.clientID)
+        self.plane.load_model_from_urdf()
+        self.plane.load_texutre()
+        self.plane.set_lateral_friction(mu_cone_ground)
         self._planeID = self.plane.get_ids()[0]
-        self.plane.set_lateral_friction(self._mu_cone_ground)
 
-        self.cone = Cone(self.clientID, self._yaw_spawn)
+        self.cone.load_model_from_urdf(yaw_spawn)
+        self.cone.set_lateral_friction(mu_cone_ground)
         self._coneID = self.cone.get_ids()[0]
-        self.cone.set_lateral_friction(self._mu_cone_ground)
+
+        # self._initial_nutation = np.radians(self._desired_nutation + self.np_random.uniform(-5,5))
+        # self.initial_cone_tilting(theta_des=self._initial_nutation, init_yaw=yaw_spawn)
+
+
+    def initial_cone_tilting(self, theta_des, init_yaw):
+        theta = 0
+        # self.eef.speedl([0.5,0.,0.])
+        self.cone.apply_action([0.5*np.sin(init_yaw),-0.5*np.cos(init_yaw)])
+        while theta < theta_des:
+            bullet.stepSimulation()
+            cone_state = self.cone.get_observation()[0]
+            theta = cone_state[3]
+        self.cone.apply_action([0.,0.])
+        bullet.stepSimulation()
+        # print("Initial tilting done")
+
 
     def bullet_setup(self, bullet_connection):
 
@@ -145,6 +185,8 @@ class RockWalkEnv(gym.Env):
             self._cam_dist = 2.5 #3
             self._cam_yaw = -20 + 90
             self._cam_pitch = -45 + 15
+        bullet.setPhysicsEngineParameter(enableFileCaching=0)
+
 
     def adjust_camera_pose(self):
         cone_pos_world = bullet.getLinkState(self._coneID,linkIndex=5,physicsClientId=self.clientID)[0]
@@ -202,6 +244,10 @@ class RockWalkEnv(gym.Env):
 
 
 
+# elif abs(cone_state[3]-self._initial_nutation)>np.radians(10):
+#     # print("terminated: nutation out of bound")
+#     self.done=True
+#     reward = -50
 
 # self.eef1 = EndEffector(self.clientID, pos=[0.1,-0.25,1.30], orientation=[0,0,np.pi/4])
 # self._eef1ID = self.eef1.get_ids()[0]

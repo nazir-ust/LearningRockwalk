@@ -9,23 +9,36 @@ import matplotlib.pyplot as plt
 from stable_baselines3 import TD3, SAC, PPO
 from stable_baselines3.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise
 from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
+from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback, CallbackList
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize, VecVideoRecorder
 
+from custom_callback import GenerateObjectCallback
 
 class RLModel:
 
     def __init__(self, connection, freq, frame_skip, train):
-        self._env = gym.make("RockWalk-v0", bullet_connection=connection, step_freq=freq, frame_skip=frame_skip)
 
         if train == True:
+            ellipse_params=[0.35,0.25]
+            apex_coordinates=[0,-0.25,1.5]
+            object_param = ellipse_params + apex_coordinates
+
+            with open('training_objects_params.txt', 'w') as f:
+                f.write("ellipse_a,ellipse_b,apex_x,apex_y,apex_z\n")
+                f.write(str(0)+","+str(0)+","+str(0)+","+str(0)+","+str(0)+"\n")
+                f.write(str(object_param[0])+","+str(object_param[1])+","+str(object_param[2])+","+str(object_param[3])+","+str(object_param[4])+"\n")
+
+            self._env = gym.make("RockWalk-v0",bullet_connection=connection,step_freq=freq,frame_skip=frame_skip,isTrain=train)
             self._env = Monitor(self._env, "./log")
+
         else:
-            pass
+            self._env = gym.make("RockWalk-v0",bullet_connection=connection,step_freq=freq,frame_skip=frame_skip,isTrain=train)
+
 
     def train_model(self):
         n_actions = self._env.action_space.shape[-1]
         action_noise = OrnsteinUhlenbeckActionNoise(mean=0*np.ones(n_actions), sigma=1.5*np.ones(n_actions)) #5 prev
+        # self._model.set_random_seed(seed=999)
 
         self._model = SAC("MlpPolicy", self._env,
                           action_noise=action_noise,
@@ -37,88 +50,41 @@ class RLModel:
                           tensorboard_log = "./rockwalk_tb/")
 
 
-        checkpoint_callback = CheckpointCallback(save_freq=25000, save_path='./save/', name_prefix='rw_model')
-        # self._model.set_random_seed(seed=999)
-        self._model.learn(total_timesteps=500000, log_interval=10, callback=checkpoint_callback)
+        object_callback = GenerateObjectCallback(check_freq=30000)
+
+        checkpoint_callback = CheckpointCallback(save_freq=30000, save_path='./save/', name_prefix='rw_model')
+
+        callback_list = CallbackList([object_callback,checkpoint_callback])
+
+        self._model.learn(total_timesteps=2000000, log_interval=10, callback=callback_list)
         self._model.save_replay_buffer('./save/buffer')
         self._env.close()
 
 
     def test_model(self, freq):
-        self._trained_model = SAC.load("./save/rw_model_75000_steps", device="cpu")
+        self._trained_model = SAC.load("./save/rw_model_690000_steps", device="cpu")
         print("Trained model loaded")
         obs = self._env.reset()
 
-        obs_x_list = list()
-        obs_y_list = list()
-        obs_psi_list = list()
-        obs_theta_list = list()
-        obs_phi_list = list()
-        obs_x_dot_list = list()
-        obs_y_dot_list = list()
-        obs_psi_dot_list = list()
-        obs_theta_dot_list = list()
-        obs_phi_dot_list = list()
-        action_x_list = list()
-        action_y_list = list()
-        action_time_list = list()
+        with open("./test_data/data.txt", "w") as f:
+            f.write("time[1],cone_state[10],cone_te[1], action[2]\n")
 
-        for count in range(5000):
+        for count in range(10000):
             action, _states = self._trained_model.predict(obs, deterministic=True)
-            # action = np.array([0.,0.0, 0.1])
             obs, rewards, dones, info = self._env.step(action)
 
             true_cone_state, true_cone_te = self._env.cone.get_observation()
 
-            obs_x_list.append(true_cone_state[0])
-            obs_y_list.append(true_cone_state[1])
-            obs_psi_list.append(true_cone_state[2])
-            obs_theta_list.append(true_cone_state[3])
-            obs_phi_list.append(true_cone_state[4])
-            obs_x_dot_list.append(true_cone_state[5])
-            obs_y_dot_list.append(true_cone_state[6])
-            obs_psi_dot_list.append(true_cone_state[7])
-            obs_theta_dot_list.append(true_cone_state[8])
-            obs_phi_dot_list.append(true_cone_state[9])
-            action_x_list.append(action[0])
-            action_y_list.append(action[1])
-            action_time_list.append(time.time())
+            data = np.concatenate((np.array([time.time()]),np.array(true_cone_state),np.array([true_cone_te]), action))
+            with open("./test_data/data.txt", "a") as f:
+                np.savetxt(f, [data], delimiter=',')
 
             time.sleep(1./240.)
-
-        obs_x_np = np.array(obs_x_list)
-        obs_y_np = np.array(obs_y_list)
-        obs_psi_np = np.array(obs_psi_list)
-        obs_theta_np = np.array(obs_theta_list)
-        obs_phi_np = np.array(obs_phi_list)
-        obs_x_dot_np = np.array(obs_x_dot_list)
-        obs_y_dot_np = np.array(obs_y_dot_list)
-        obs_psi_dot_np = np.array(obs_psi_dot_list)
-        obs_theta_dot_np = np.array(obs_theta_dot_list)
-        obs_phi_dot_np = np.array(obs_phi_dot_list)
-        action_x_np = np.array(action_x_list)
-        action_y_np = np.array(action_y_list)
-        action_time_np = np.array(action_time_list)
-
-        np.savez("./sim_data/data.npz",
-                 obs_x = obs_x_np,
-                 obs_y = obs_y_np,
-                 obs_psi = obs_psi_np,
-                 obs_theta = obs_theta_np,
-                 obs_phi = obs_phi_np,
-                 obs_x_dot = obs_x_dot_np,
-                 obs_y_dot = obs_y_dot_np,
-                 obs_psi_dot = obs_psi_dot_np,
-                 obs_theta_dot = obs_theta_dot_np,
-                 obs_phi_dot = obs_phi_dot_np,
-                 action_x=action_x_np,
-                 action_y=action_y_np,
-                 time=action_time_np)
 
 
 def main():
     freq = 50
-    frame_skip = 5
+    frame_skip = 10
     train_begin = input("Type 'yes' to TRAIN model")
     if train_begin == "yes":
         rl_model = RLModel(0, freq, frame_skip, train=True)
