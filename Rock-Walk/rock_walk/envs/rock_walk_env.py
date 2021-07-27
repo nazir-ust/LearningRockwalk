@@ -57,10 +57,10 @@ class RockWalkEnv(gym.Env):
         if self._isTrain==True:
             data = np.loadtxt(self._object_param_file_path, delimiter=',', skiprows=1, dtype=np.float64)
             object_param = list(data[-1,:])
-            action_scale = self._random_action_scale
+            action_scale = 0.5 #self._random_action_scale
         else:
             object_param = self._init_object_param
-            action_scale = 0.15
+            action_scale = 0.5
 
         self.cone.apply_action(action*action_scale)
 
@@ -70,7 +70,7 @@ class RockWalkEnv(gym.Env):
         true_cone_state, true_cone_te = self.cone.get_observation()
         noisy_cone_state = self.cone.get_noisy_observation(self.np_random)
 
-        reward = self.set_rewards(true_cone_state, true_cone_te)
+        reward = self.set_rewards(true_cone_state, true_cone_te, action*action_scale)
 
         if self._bullet_connection == 2:
             self.adjust_camera_pose()
@@ -86,8 +86,14 @@ class RockWalkEnv(gym.Env):
         bullet.resetSimulation(self.clientID)
         bullet.setGravity(0, 0, -9.8)
 
+        if self._isTrain==True:
+            object_param = list(np.loadtxt(self._object_param_file_path, delimiter=',', skiprows=1, dtype=np.float64)[-1:].flatten())
+            yaw_spawn = self.np_random.uniform(-np.pi, np.pi) #np.pi/2 + self.np_random.uniform(-np.pi/4, np.pi/4)
+        else:
+            object_param = self._init_object_param
+            yaw_spawn = np.pi/2
+
         mu_cone_ground = np.inf
-        yaw_spawn = self.np_random.uniform(-np.pi, np.pi) #np.pi/2 + self.np_random.uniform(-np.pi/4, np.pi/4)
         self._random_action_scale = self.np_random.uniform(0.1, 1.0)
         self.initialize_physical_objects(yaw_spawn, mu_cone_ground)
 
@@ -99,11 +105,8 @@ class RockWalkEnv(gym.Env):
         noisy_cone_state = self.cone.get_noisy_observation(self.np_random)
 
         self.prev_x = [true_cone_state[0]]
+        self.prev_a = [0,0]
 
-        if self._isTrain==True:
-            object_param = list(np.loadtxt(self._object_param_file_path, delimiter=',', skiprows=1, dtype=np.float64)[-1:].flatten())
-        else:
-            object_param = self._init_object_param
 
 
         ob = np.array([noisy_cone_state[2], noisy_cone_state[3], noisy_cone_state[4],
@@ -112,7 +115,7 @@ class RockWalkEnv(gym.Env):
         return ob
 
 
-    def set_rewards(self, cone_state, cone_te):
+    def set_rewards(self, cone_state, cone_te, action):
 
         if np.linalg.norm(np.array([cone_state[0], cone_state[1]])) > 15:
             print("terminated: distance exceeded 15 meters")
@@ -122,24 +125,21 @@ class RockWalkEnv(gym.Env):
         elif len(bullet.getClosestPoints(self._coneID, self._planeID, 0.02)) == 0:
             print("terminated: object off the ground")
             self.done = True
-            reward = -50
+            reward = 0
 
-        elif cone_state[3]>np.radians(60):
-            print("terminated: cone too close to the ground")
-            self.done = True
-            reward = -50
-
-        elif cone_state[3]>np.radians(45) or cone_state[3]<np.radians(15):
-            # print("nutation out of bound")
-            reward = -20
-
-        elif cone_te>5.0 or abs(cone_state[4])>np.pi/2:
-            # print("energy exceeded 5 joules")
-            reward = -20
+        # elif cone_state[3]>np.radians(60) or cone_state[3]<np.radians(15):
+        #     print("terminated: cone too close to the ground")
+        #     self.done = True
+        #     reward = -50
 
         else:
-            reward = 1000*max(cone_state[0]-self.prev_x[0],0)
+            action_accel = np.linalg.norm(np.array([action[0]-self.prev_a[0], action[1]-self.prev_a[1]]))
+            reward = 500*(cone_state[0]-self.prev_x[0]) \
+                     -10*abs(cone_state[3]-np.radians(self._desired_nutation))\
+                     -10*abs(cone_state[4]) \
+                     -5*action_accel
             self.prev_x = [cone_state[0]]
+            self.prev_a = [action[0], action[1]]
 
         return reward
 
@@ -155,14 +155,17 @@ class RockWalkEnv(gym.Env):
         self.cone.set_lateral_friction(mu_cone_ground)
         self._coneID = self.cone.get_ids()[0]
 
-        # self._initial_nutation = np.radians(self._desired_nutation + self.np_random.uniform(-5,5))
-        # self.initial_cone_tilting(theta_des=self._initial_nutation, init_yaw=yaw_spawn)
+        self._initial_nutation = np.radians(self._desired_nutation) # + self.np_random.uniform(-5,5))
+
+        if self._isTrain==True:
+            pass
+        else:
+            self.initial_cone_tilting(theta_des=self._initial_nutation)
 
 
-    def initial_cone_tilting(self, theta_des, init_yaw):
+    def initial_cone_tilting(self, theta_des):
         theta = 0
-        # self.eef.speedl([0.5,0.,0.])
-        self.cone.apply_action([0.5*np.sin(init_yaw),-0.5*np.cos(init_yaw)])
+        self.cone.apply_action([0.5,0])
         while theta < theta_des:
             bullet.stepSimulation()
             cone_state = self.cone.get_observation()[0]

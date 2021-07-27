@@ -71,11 +71,12 @@ class TrainObject:
     def set_lateral_friction(self, value):
         bullet.changeDynamics(self.objectID, 5, lateralFriction=value, physicsClientId=self.clientID)
 
-    def apply_action(self, action):
+    def apply_action(self, action_b):
+
+        action_s = self.transform_action_to_world_frame(action_b)
 
         action_rot = R.from_euler('z', -self._yaw_spawn).as_matrix()
-        action = np.matmul(action_rot, np.array([action[0], action[1], 0]))
-
+        action = np.matmul(action_rot, np.array([action_s[0], action_s[1], action_s[2]]))
 
 
         bullet.setJointMotorControl2(self.objectID,
@@ -96,6 +97,7 @@ class TrainObject:
                                      targetVelocity=action[2],
                                      force=0,
                                      physicsClientId=self.clientID)
+
 
     def get_observation(self):
         lin_pos_base_world, quat_base_world = bullet.getLinkState(self.objectID,linkIndex=5,physicsClientId=self.clientID)[0:2]
@@ -127,6 +129,21 @@ class TrainObject:
         cone_state, cone_te = self.get_observation()
         # mu = np.zeros([10,])
         return cone_state+np_random.normal(0.0,0.02,10) #0.05
+
+    def transform_action_to_world_frame(self, action_b):
+        """Transform actions from b frame to s frame"""
+        cone_state, cone_te = self.get_observation()
+
+        rot_psi = R.from_euler('z', cone_state[2]).as_matrix()
+        rot_init = R.from_euler('z', np.pi/2).as_matrix()
+        rot_theta = R.from_euler('y', cone_state[3]).as_matrix()
+
+        rot_sb = np.matmul(np.matmul(rot_psi, rot_init),rot_theta)
+
+        action_s = np.matmul(rot_sb,np.array([action_b[0], action_b[1], 0]))
+
+        return action_s
+
 
     def generate_urdf_file(self):
 

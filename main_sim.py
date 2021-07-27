@@ -14,13 +14,15 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize, VecVideo
 
 from custom_callback import GenerateObjectCallback
 
+from scipy.spatial.transform import Rotation as R
+
 class RLModel:
 
     def __init__(self, connection, freq, frame_skip, train):
 
         if train == True:
-            ellipse_params=[0.35,0.25]
-            apex_coordinates=[0,-0.25,1.5]
+            ellipse_params=[0.35,0.35]
+            apex_coordinates=[0,-0.35,1.5]
             object_param = ellipse_params + apex_coordinates
 
             with open('training_objects_params.txt', 'w') as f:
@@ -50,26 +52,26 @@ class RLModel:
                           tensorboard_log = "./rockwalk_tb/")
 
 
-        object_callback = GenerateObjectCallback(check_freq=30000)
+        object_callback = GenerateObjectCallback(check_freq=1000000)
 
-        checkpoint_callback = CheckpointCallback(save_freq=30000, save_path='./save/', name_prefix='rw_model')
+        checkpoint_callback = CheckpointCallback(save_freq=20000, save_path='./save/', name_prefix='rw_model')
 
         callback_list = CallbackList([object_callback,checkpoint_callback])
 
-        self._model.learn(total_timesteps=2000000, log_interval=10, callback=callback_list)
+        self._model.learn(total_timesteps=500000, log_interval=10, callback=callback_list)
         self._model.save_replay_buffer('./save/buffer')
         self._env.close()
 
 
     def test_model(self, freq):
-        self._trained_model = SAC.load("./save/rw_model_690000_steps", device="cpu")
+        self._trained_model = SAC.load("./save/rw_model_400000_steps", device="cpu")
         print("Trained model loaded")
         obs = self._env.reset()
 
         with open("./test_data/data.txt", "w") as f:
             f.write("time[1],cone_state[10],cone_te[1], action[2]\n")
 
-        for count in range(10000):
+        for count in range(5000):
             action, _states = self._trained_model.predict(obs, deterministic=True)
             obs, rewards, dones, info = self._env.step(action)
 
