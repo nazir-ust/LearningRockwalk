@@ -54,8 +54,10 @@ def main():
     ax1.legend()
     ax1.set_title('Position of cone center of mass in meters')
 
-    ax2.plot(data._time, data._obs_theta)
+    ax2.plot(data._time, data._obs_theta, label='nutation')
+    ax2.plot(data._time, np.radians(25)*np.ones([np.size(data._time)]), label='desired nutation')
     ax2.set_ylim(0, np.pi/2)
+    ax2.legend()
     ax2.set_title('Nutation angle in radians')
 
     ax3.plot(data._time, data._obs_phi)
@@ -63,9 +65,7 @@ def main():
     ax3.set_title('Spin angle in radians')
 
     ax4.plot(data._time, data._cone_energy, label='Energy of CoM')
-    ax4.plot(data._time, 5*np.ones([np.size(data._time)]), label='upper bound')
     ax4.set_ylim(3.5,5.5)
-    ax4.legend()
     ax4.set_title('Cone energy')
 
     ax5.plot(data._time, data._action_x, label='Vx_C')

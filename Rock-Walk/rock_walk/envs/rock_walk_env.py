@@ -21,6 +21,7 @@ class RockWalkEnv(gym.Env):
         self._bullet_connection = bullet_connection
         self._frame_skip = frame_skip
         self._isTrain = isTrain
+        self._episode_timout = 3
 
         self._desired_nutation = 25 # in degrees
 
@@ -54,13 +55,19 @@ class RockWalkEnv(gym.Env):
         self.reset()
 
     def step(self, action):
+
+        duration = time.time()-self.start_time
+        if duration > self._episode_timout:
+            print("terminated: timout")
+            self.done = True
+
         if self._isTrain==True:
             data = np.loadtxt(self._object_param_file_path, delimiter=',', skiprows=1, dtype=np.float64)
             object_param = list(data[-1,:])
             action_scale = 0.5 #self._random_action_scale
         else:
             object_param = self._init_object_param
-            action_scale = 0.5
+            action_scale = 0.2
 
         self.cone.apply_action(action*action_scale)
 
@@ -107,8 +114,6 @@ class RockWalkEnv(gym.Env):
         self.prev_x = [true_cone_state[0]]
         self.prev_a = [0,0]
 
-
-
         ob = np.array([noisy_cone_state[2], noisy_cone_state[3], noisy_cone_state[4],
                        noisy_cone_state[7], noisy_cone_state[8], noisy_cone_state[9]]+object_param, dtype=np.float64)
 
@@ -117,26 +122,16 @@ class RockWalkEnv(gym.Env):
 
     def set_rewards(self, cone_state, cone_te, action):
 
-        if np.linalg.norm(np.array([cone_state[0], cone_state[1]])) > 15:
-            print("terminated: distance exceeded 15 meters")
-            self.done=True
-            reward = 0
-
-        elif len(bullet.getClosestPoints(self._coneID, self._planeID, 0.02)) == 0:
+        if len(bullet.getClosestPoints(self._coneID, self._planeID, 0.02)) == 0:
             print("terminated: object off the ground")
             self.done = True
-            reward = 0
-
-        # elif cone_state[3]>np.radians(60) or cone_state[3]<np.radians(15):
-        #     print("terminated: cone too close to the ground")
-        #     self.done = True
-        #     reward = -50
+            reward = -50
 
         else:
             action_accel = np.linalg.norm(np.array([action[0]-self.prev_a[0], action[1]-self.prev_a[1]]))
             reward = 500*(cone_state[0]-self.prev_x[0]) \
-                     -10*abs(cone_state[3]-np.radians(self._desired_nutation))\
-                     -10*abs(cone_state[4]) \
+                     -5*abs(cone_state[3]-np.radians(self._desired_nutation))\
+                     -5*abs(cone_state[4]) \
                      -5*action_accel
             self.prev_x = [cone_state[0]]
             self.prev_a = [action[0], action[1]]
@@ -161,6 +156,7 @@ class RockWalkEnv(gym.Env):
             pass
         else:
             self.initial_cone_tilting(theta_des=self._initial_nutation)
+            pass
 
 
     def initial_cone_tilting(self, theta_des):

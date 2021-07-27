@@ -64,14 +64,14 @@ class RLModel:
 
 
     def test_model(self, freq):
-        self._trained_model = SAC.load("./save/rw_model_400000_steps", device="cpu")
+        self._trained_model = SAC.load("./save/rw_model_140000_steps", device="cpu")
         print("Trained model loaded")
         obs = self._env.reset()
 
         with open("./test_data/data.txt", "w") as f:
             f.write("time[1],cone_state[10],cone_te[1], action[2]\n")
 
-        for count in range(5000):
+        for count in range(7000):
             action, _states = self._trained_model.predict(obs, deterministic=True)
             obs, rewards, dones, info = self._env.step(action)
 
