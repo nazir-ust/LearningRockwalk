@@ -71,7 +71,7 @@ class RLModel:
         with open("./test_data/data.txt", "w") as f:
             f.write("time[1],cone_state[10],cone_te[1], action[2]\n")
 
-        for count in range(7000):
+        for count in range(8000):
             action, _states = self._trained_model.predict(obs, deterministic=True)
             obs, rewards, dones, info = self._env.step(action)
 

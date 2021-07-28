@@ -21,11 +21,11 @@ class RockWalkEnv(gym.Env):
         self._bullet_connection = bullet_connection
         self._frame_skip = frame_skip
         self._isTrain = isTrain
-        self._episode_timout = 3
+        self._episode_timout = 2.5
 
         self._desired_nutation = 25 # in degrees
 
-        self._object_param_file_path = "/home/nazir/learning_rockwalk/learning_moai/training_objects_params.txt"
+        self._object_param_file_path = "/home/abdullah/learning_rockwalk/v3/training_objects_params.txt"
         if self._isTrain==True:
             self._init_object_param = list(np.loadtxt(self._object_param_file_path, delimiter=',', skiprows=1, dtype=np.float64)[-1:].flatten())
         else:
@@ -130,11 +130,12 @@ class RockWalkEnv(gym.Env):
         else:
             action_accel = np.linalg.norm(np.array([action[0]-self.prev_a[0], action[1]-self.prev_a[1]]))
             reward = 500*(cone_state[0]-self.prev_x[0]) \
-                     -5*abs(cone_state[3]-np.radians(self._desired_nutation))\
-                     -5*abs(cone_state[4]) \
+                     -10*abs(cone_state[3]-np.radians(self._desired_nutation))\
+                     -15*abs(cone_state[4]) \
                      -5*action_accel
             self.prev_x = [cone_state[0]]
             self.prev_a = [action[0], action[1]]
+
 
         return reward
 
@@ -155,7 +156,7 @@ class RockWalkEnv(gym.Env):
         if self._isTrain==True:
             pass
         else:
-            self.initial_cone_tilting(theta_des=self._initial_nutation)
+            # self.initial_cone_tilting(theta_des=self._initial_nutation)
             pass
 
 
