@@ -67,7 +67,7 @@ class RockWalkEnv(gym.Env):
             action_scale = 0.5 #self._random_action_scale
         else:
             object_param = self._init_object_param
-            action_scale = 0.2
+            action_scale = 0.15
 
         self.cone.apply_action(action*action_scale)
 
@@ -156,7 +156,7 @@ class RockWalkEnv(gym.Env):
         if self._isTrain==True:
             pass
         else:
-            # self.initial_cone_tilting(theta_des=self._initial_nutation)
+            self.initial_cone_tilting(theta_des=self._initial_nutation)
             pass
 
 
