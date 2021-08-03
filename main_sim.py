@@ -64,7 +64,7 @@ class RLModel:
 
 
     def test_model(self, freq):
-        self._trained_model = SAC.load("./save/rw_model_140000_steps", device="cpu")
+        self._trained_model = SAC.load("./save/rw_model_500000_steps", device="cpu")
         print("Trained model loaded")
         obs = self._env.reset()
 

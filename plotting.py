@@ -3,13 +3,59 @@ import math
 import time
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
+from matplotlib import cm
+
+from stable_baselines3 import TD3, SAC, PPO
+
+class LoadModel:
+    def __init__(self, filename):
+        self.load_model(filename)
+
+    def load_model(self, filename):
+        self._model = SAC.load(filename, device="cpu")
+
+    def predict_action(self):
+        ellipse_params=[0.35,0.35]
+        apex_coordinates=[0,-0.35,1.5]
+        object_param = ellipse_params + apex_coordinates
+
+        steps = 50
+        action_1 = np.zeros([steps,steps])
+        action_2 = np.zeros([steps,steps])
+
+        phi_range = np.linspace(-np.pi/4, np.pi/4, steps)
+        phi_dot_range = np.linspace(-2, 2, steps)
+
+        for idx_phi, phi in np.ndenumerate(phi_range):
+            for idx_phi_dot, phi_dot in np.ndenumerate(phi_dot_range):
+                obs = np.array([-np.pi/2,np.radians(25),phi,0,0,phi_dot]+object_param)
+                action_b, _states = self._model.predict(obs, deterministic=True)
+
+                action_1[idx_phi_dot, idx_phi] = action_b[0]
+                action_2[idx_phi_dot, idx_phi] = action_b[1]
+
+        X_phi, Y_phi_dot = np.meshgrid(phi_range, phi_dot_range)
+
+        fig, (ax1, ax2) = plt.subplots(1,2, subplot_kw={"projection": "3d"})
+        fig.set_size_inches(18.5, 10.5)
+        ax1.plot_surface(X_phi, Y_phi_dot, action_1, cmap=cm.coolwarm)
+        ax1.set_xlabel('phi')
+        ax1.set_ylabel('phi_dot')
+        ax1.set_zlabel('Forward/Backward tilting action')
+        ax2.plot_surface(X_phi, Y_phi_dot, action_2, cmap=cm.coolwarm)
+        ax2.set_xlabel('phi')
+        ax2.set_ylabel('phi_dot')
+        ax2.set_zlabel('tilting action')
+        ax2.set_title('Sideways tilting action predicted by the learnt policy (theta=25deg)')
+
+        plt.show()
+
 
 
 class LoadData:
     def __init__(self, filename):
         # self.plot_action_data()
         self.load_all_data(filename)
-
 
     def load_all_data(self, filename):
         data = np.loadtxt(filename, delimiter=',', skiprows=1, dtype=np.float64)
@@ -33,71 +79,49 @@ class LoadData:
         self._action_x = data[:,12]
         self._action_y = data[:,13]
 
+    def plot_main(self):
+        # Create two subplots and unpack the output array immediately
+        fig, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(5, 1, sharex=True)
+        fig.set_size_inches(18.5, 10.5)
+        ax1.plot(self._time, self._obs_x, label='x_CM')
+        ax1.plot(self._time, self._obs_y, label='y_CM')
+        ax1.legend()
+        ax1.set_title('Position of cone center of mass in meters')
 
+        ax2.plot(self._time, self._obs_theta, label='nutation')
+        ax2.plot(self._time, np.radians(25)*np.ones([np.size(self._time)]), label='desired nutation')
+        ax2.set_ylim(0, np.pi/2)
+        ax2.legend()
+        ax2.set_title('Nutation angle in radians')
 
-    def plot_action_data(self):
-        plt.figure()
-        plt.plot(self._time, self._action_x)
-        plt.plot(self._time, self._action_y)
+        ax3.plot(self._time, self._obs_phi)
+        ax3.set_ylim(-np.pi, np.pi)
+        ax3.set_title('Spin angle in radians')
+
+        ax4.plot(self._time, self._cone_energy, label='Energy of CoM')
+        ax4.set_ylim(3.5,5.5)
+        ax4.set_title('Cone energy')
+
+        ax5.plot(self._time, self._action_x, label='Vx_C')
+        ax5.plot(self._time, self._action_y, label='Vy_C')
+        ax5.legend()
+        ax5.set_title('Actions returned by agent: Velocity of control point long x- and y-axes in meters per second **Actual magnitude is scaled**')
+        ax5.set_xlabel('Time (s)')
         plt.show()
+
+
 
 
 def main():
 
     data = LoadData("./test_data/data.txt")
 
-    # Create two subplots and unpack the output array immediately
-    fig, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(5, 1, sharex=True)
-    fig.set_size_inches(18.5, 10.5)
-    ax1.plot(data._time, data._obs_x, label='x_CM')
-    ax1.plot(data._time, data._obs_y, label='y_CM')
-    ax1.legend()
-    ax1.set_title('Position of cone center of mass in meters')
+    data.plot_main()
 
-    ax2.plot(data._time, data._obs_theta, label='nutation')
-    ax2.plot(data._time, np.radians(25)*np.ones([np.size(data._time)]), label='desired nutation')
-    ax2.set_ylim(0, np.pi/2)
-    ax2.legend()
-    ax2.set_title('Nutation angle in radians')
-
-    ax3.plot(data._time, data._obs_phi)
-    ax3.set_ylim(-np.pi, np.pi)
-    ax3.set_title('Spin angle in radians')
-
-    ax4.plot(data._time, data._cone_energy, label='Energy of CoM')
-    ax4.set_ylim(3.5,5.5)
-    ax4.set_title('Cone energy')
-
-    ax5.plot(data._time, data._action_x, label='Vx_C')
-    ax5.plot(data._time, data._action_y, label='Vy_C')
-    ax5.legend()
-    ax5.set_title('Actions returned by agent: Velocity of control point long x- and y-axes in meters per second **Actual magnitude is scaled**')
-    ax5.set_xlabel('Time (s)')
-    plt.show()
-    # plt.show()
-    # plt.figure()
-    # plt.plot(data._time, data._obs_theta)
-    # plt.plot(data._time, data._obs_phi)
-    # plt.show()
-    # data.plot_action_data()
+    # load_model = LoadModel("./save/rw_model_180000_steps")
+    # load_model.predict_action()
 
 
-    exit()
-
-    sf1_data = LoadData("./sim_data/data_sf1.npz")
-    sf2_data = LoadData("./sim_data/data_sf2.npz")
-    sf3_data = LoadData("./sim_data/data_sf3.npz")
-    sf4_data = LoadData("./sim_data/data_sf4.npz")
-
-
-    #Plotting
-    plt.figure()
-    plt.plot(sf1_data._time, sf1_data._obs_theta, label="scale factor = 1.0")
-    plt.plot(sf2_data._time, sf2_data._obs_theta, label="scale factor = 0.5")
-    plt.plot(sf3_data._time, sf3_data._obs_theta, label="scale factor = 0.3")
-    plt.ylim(0, 1.0)
-    plt.legend(fontsize=15)
-    plt.show()
 
 if __name__ == "__main__":
     main()

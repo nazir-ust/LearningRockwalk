@@ -78,7 +78,7 @@ def main():
         rate = rospy.Rate(freq)
         dt = 1/10.
         prev_speed = 0.
-        action_scale = 0.20
+        action_scale = 0.15
 
         while not rospy.is_shutdown():
             t_start = time.time()
