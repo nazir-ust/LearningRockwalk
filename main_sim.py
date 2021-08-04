@@ -65,7 +65,7 @@ class RLModel:
 
 
     def test_model(self, freq):
-        self._trained_model = SAC.load("./save/rw_model_120000_steps", device="cpu")
+        self._trained_model = SAC.load("./save/rw_model_60000_steps", device="cpu")
         print("Trained model loaded")
         obs = self._env.reset()
 
@@ -87,7 +87,7 @@ class RLModel:
 
 def main():
     freq = 50
-    frame_skip = 10 #worked with 10
+    frame_skip = 1
     train_begin = input("Type 'yes' to TRAIN model")
     if train_begin == "yes":
         rl_model = RLModel(0, freq, frame_skip, train=True)

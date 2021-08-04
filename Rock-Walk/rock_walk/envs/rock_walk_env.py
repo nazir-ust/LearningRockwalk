@@ -21,7 +21,7 @@ class RockWalkEnv(gym.Env):
         self._bullet_connection = bullet_connection
         self._frame_skip = frame_skip
         self._isTrain = isTrain
-        self._episode_timout = 2.5
+        self._episode_timout = 10
 
         self._desired_nutation = 25 # in degrees
 
@@ -64,10 +64,10 @@ class RockWalkEnv(gym.Env):
         if self._isTrain==True:
             data = np.loadtxt(self._object_param_file_path, delimiter=',', skiprows=1, dtype=np.float64)
             object_param = list(data[-1,:])
-            action_scale = 1 #0.5 #self._random_action_scale
+            action_scale = 0.35 #self._random_action_scale
         else:
             object_param = self._init_object_param
-            action_scale = 1 #0.15
+            action_scale = 0.35 #0.15
 
         self.cone.apply_action(action*action_scale)
 
@@ -113,6 +113,7 @@ class RockWalkEnv(gym.Env):
 
         self.prev_x = [true_cone_state[0]]
         self.prev_a = [0,0]
+        self._prev_time = time.time()
 
         ob = np.array([noisy_cone_state[2], noisy_cone_state[3], noisy_cone_state[4],
                        noisy_cone_state[7], noisy_cone_state[8], noisy_cone_state[9]]+object_param, dtype=np.float64)
@@ -125,19 +126,22 @@ class RockWalkEnv(gym.Env):
         if len(bullet.getClosestPoints(self._coneID, self._planeID, 0.02)) == 0:
             print("terminated: object off the ground")
             self.done = True
-            reward = -50
+            reward = -500
+
+        elif cone_state[3]<np.radians(10) or cone_state[3]>np.radians(40):
+            print("terminated: nutation out of bound")
+            self.done=True
+            reward = -500
 
         else:
-            action_accel = np.linalg.norm(np.array([action[0]-self.prev_a[0], action[1]-self.prev_a[1]]))
+            action_accel = np.linalg.norm(action-np.array(self.prev_a))
             action_mag = np.linalg.norm(action)
             reward = 500*(cone_state[0]-self.prev_x[0]) \
-                     -10*abs(cone_state[3]-np.radians(self._desired_nutation))\
-                     -15*abs(cone_state[4]) \
-                     -5*action_accel \
-                     -10*max(action_mag-0.30, 0)
+                     -15*abs(cone_state[4])
+                     # -10*abs(cone_state[3]-np.radians(25))\
+                     # -5*action_mag -2*action_accel
             self.prev_x = [cone_state[0]]
             self.prev_a = [action[0], action[1]]
-
 
         return reward
 
