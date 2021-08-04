@@ -13,7 +13,6 @@ class TrainObject:
 
     def generate_object_mesh(self, ellipse_params, apex_coordinates, density):
         """
-        Input: dictionary of geometry parameters of the cone-shaped object with ellipse base
         apex_coordinates: x, y and z coordinates of the cone's apex.
         ellipse_params: length of semi-major axis (x-axis) and semi-minor axis (y-axis), repsectively
         """
@@ -119,6 +118,7 @@ class TrainObject:
         com_ke = 0.5*1.0*(lin_vel_base_world[0]**2+lin_vel_base_world[1]**2+lin_vel_base_world[2]**2)
         com_pe = 1.0*9.81*lin_pos_base_world[2]
         # rot_ke = compute_rotation_ke(ang_vel_base_world)
+        self._z_COM = lin_pos_base_world[2]
 
         total_energy = com_ke + com_pe #+ rot_ke
 
@@ -130,8 +130,8 @@ class TrainObject:
         # mu = np.zeros([10,])
         return cone_state+np_random.normal(0.0,0.02,10) #0.05
 
-    def transform_action_to_world_frame(self, action_b):
-        """Transform actions from b frame to s frame"""
+
+    def get_rot_transform_s_b(self):
         cone_state, cone_te = self.get_observation()
 
         rot_psi = R.from_euler('z', cone_state[2]).as_matrix()
@@ -140,9 +140,87 @@ class TrainObject:
 
         rot_sb = np.matmul(np.matmul(rot_psi, rot_init),rot_theta)
 
-        action_s = np.matmul(rot_sb,np.array([action_b[0], action_b[1], 0]))
+        return rot_sb
+
+    def transform_action_to_world_frame(self, action_b):
+        # """Transform actions from b frame to s frame"""
+
+        # rot_sb = self.get_rot_transform_s_b()
+        # action_s = np.matmul(rot_sb,np.array([action_b[0], action_b[1], 0]))
+
+
+        rot_mat = self.compute_tangent_plane_transform_at_C()
+        action_s = np.matmul(rot_mat,np.array([action_b[0], action_b[1], 0]))
 
         return action_s
+
+
+    def get_vector_GC(self):
+        cone_state, cone_te = self.get_observation()
+        rot_sb = self.get_rot_transform_s_b()
+        rot_phi = R.from_euler('z', cone_state[4]).as_matrix()
+        rot_sbprime = np.matmul(rot_sb, rot_phi)
+
+        com_coordinates_bprime = np.matmul(R.from_euler('z', np.pi/2).as_matrix(),
+                                 np.array(self._mesh_CoM)+np.array(self._apex_coordinates))
+
+
+        apex_coordinates_bprime = np.matmul(R.from_euler('z', np.pi/2).as_matrix(),
+                                  np.array(self._apex_coordinates))
+
+
+        DCM_s = np.matmul(rot_sbprime,com_coordinates_bprime)
+
+
+        disk_center_s = np.array([cone_state[0], cone_state[1], self._z_COM])-DCM_s
+
+
+        ellipse_a = self._ellipse_params[0]
+        ellipse_b = self._ellipse_params[1]
+
+        num =  (ellipse_a*ellipse_b)
+        denom = np.sqrt(np.square(ellipse_a*np.cos(cone_state[4]))+np.square(ellipse_b*np.sin(cone_state[4])))
+        ellipse_r_phi =num/denom
+        DG_b = np.array([ellipse_r_phi,0,0])
+
+        ground_contact_s = disk_center_s + np.matmul(rot_sb,DG_b)
+
+        apex_coordinate_s = disk_center_s + np.matmul(rot_sbprime, apex_coordinates_bprime)
+
+        vec_GC = apex_coordinate_s-ground_contact_s
+
+        return vec_GC
+
+    def compute_tangent_plane_transform_at_C(self):
+        vec_GC_s = self.get_vector_GC()
+        unit_vec_GC_s = vec_GC_s/np.linalg.norm(vec_GC_s)
+
+        rot_vector = np.cross(np.array([0,0,1]), unit_vec_GC_s)
+        unit_rot_vector = rot_vector/np.linalg.norm(rot_vector)
+
+        rot_angle = np.arccos(np.dot(np.array([0,0,1]), unit_vec_GC_s))
+
+        rot_mat = np.eye(3) + np.sin(rot_angle)*self.skew(unit_rot_vector) \
+                            + (1-np.cos(rot_angle))*np.matmul(self.skew(unit_rot_vector), self.skew(unit_rot_vector))
+
+        cone_state, cone_te = self.get_observation()
+
+        return np.matmul(rot_mat, R.from_euler('z', cone_state[2]+np.pi/2).as_matrix())
+
+
+    def evaluate_feasiblity(self, action):
+        vec_GC_s = self.get_vector_GC()
+        unit_vec_GC_s = vec_GC_s/np.linalg.norm(vec_GC_s)
+
+        print(np.dot(unit_vec_GC_s, action))
+
+
+
+
+    def skew(self, x):
+        return np.array([[0, -x[2], x[1]],
+                         [x[2], 0, -x[0]],
+                         [-x[1], x[0], 0]])
 
 
     def generate_urdf_file(self):

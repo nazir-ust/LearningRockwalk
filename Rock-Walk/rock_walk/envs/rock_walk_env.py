@@ -25,7 +25,7 @@ class RockWalkEnv(gym.Env):
 
         self._desired_nutation = 25 # in degrees
 
-        self._object_param_file_path = "/home/abdullah/learning_rockwalk/v3/training_objects_params.txt"
+        self._object_param_file_path = "/home/nazir/learning_rockwalk/workstation/training_objects_params.txt"
         if self._isTrain==True:
             self._init_object_param = list(np.loadtxt(self._object_param_file_path, delimiter=',', skiprows=1, dtype=np.float64)[-1:].flatten())
         else:
@@ -64,10 +64,10 @@ class RockWalkEnv(gym.Env):
         if self._isTrain==True:
             data = np.loadtxt(self._object_param_file_path, delimiter=',', skiprows=1, dtype=np.float64)
             object_param = list(data[-1,:])
-            action_scale = 0.5 #self._random_action_scale
+            action_scale = 1 #0.5 #self._random_action_scale
         else:
             object_param = self._init_object_param
-            action_scale = 0.15
+            action_scale = 1 #0.15
 
         self.cone.apply_action(action*action_scale)
 
@@ -95,7 +95,7 @@ class RockWalkEnv(gym.Env):
 
         if self._isTrain==True:
             object_param = list(np.loadtxt(self._object_param_file_path, delimiter=',', skiprows=1, dtype=np.float64)[-1:].flatten())
-            yaw_spawn = self.np_random.uniform(-np.pi, np.pi) #np.pi/2 + self.np_random.uniform(-np.pi/4, np.pi/4)
+            yaw_spawn = np.pi/2 #+ self.np_random.uniform(-np.pi/4, np.pi/4) self.np_random.uniform(-np.pi, np.pi) #
         else:
             object_param = self._init_object_param
             yaw_spawn = np.pi/2
@@ -129,10 +129,12 @@ class RockWalkEnv(gym.Env):
 
         else:
             action_accel = np.linalg.norm(np.array([action[0]-self.prev_a[0], action[1]-self.prev_a[1]]))
+            action_mag = np.linalg.norm(action)
             reward = 500*(cone_state[0]-self.prev_x[0]) \
                      -10*abs(cone_state[3]-np.radians(self._desired_nutation))\
                      -15*abs(cone_state[4]) \
-                     -5*action_accel
+                     -5*action_accel \
+                     -10*max(action_mag-0.30, 0)
             self.prev_x = [cone_state[0]]
             self.prev_a = [action[0], action[1]]
 
@@ -154,6 +156,7 @@ class RockWalkEnv(gym.Env):
         self._initial_nutation = np.radians(self._desired_nutation) # + self.np_random.uniform(-5,5))
 
         if self._isTrain==True:
+            self.initial_cone_tilting(theta_des=self._initial_nutation)
             pass
         else:
             self.initial_cone_tilting(theta_des=self._initial_nutation)

@@ -50,6 +50,7 @@ class RLModel:
                           learning_starts=20000,
                           verbose=1,
                           tensorboard_log = "./rockwalk_tb/")
+                          # ent_coef=1.5,
 
 
         object_callback = GenerateObjectCallback(check_freq=1000000)
@@ -64,14 +65,14 @@ class RLModel:
 
 
     def test_model(self, freq):
-        self._trained_model = SAC.load("./save/rw_model_140000_steps", device="cpu")
+        self._trained_model = SAC.load("./save/rw_model_120000_steps", device="cpu")
         print("Trained model loaded")
         obs = self._env.reset()
 
         with open("./test_data/data.txt", "w") as f:
             f.write("time[1],cone_state[10],cone_te[1], action[2]\n")
 
-        for count in range(8000):
+        for count in range(5000):
             action, _states = self._trained_model.predict(obs, deterministic=True)
             obs, rewards, dones, info = self._env.step(action)
 
@@ -86,7 +87,7 @@ class RLModel:
 
 def main():
     freq = 50
-    frame_skip = 10
+    frame_skip = 10 #worked with 10
     train_begin = input("Type 'yes' to TRAIN model")
     if train_begin == "yes":
         rl_model = RLModel(0, freq, frame_skip, train=True)

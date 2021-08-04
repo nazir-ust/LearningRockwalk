@@ -7,10 +7,11 @@ import math
 import numpy as np
 import gym
 import rock_walk
-from scipy.spatial.transform import Rotation as R
 
 from robot_utils import RobotSetup
+from helper_functions import *
 from stable_baselines3 import TD3, SAC, PPO
+
 
 # from std_msgs.msg import Float64
 from geometry_msgs.msg import Vector3, Pose, Twist, TwistStamped
@@ -23,7 +24,7 @@ KONG_IP = '192.168.1.10'
 
 
 def load_model():
-    model = SAC.load("./save_real/rw_model_140000_steps", device="cpu") #model3_200000_steps
+    model = SAC.load("./save_real/rw_model_180000_steps", device="cpu") #model3_200000_steps
     return model
 
 def shutdown():
@@ -41,16 +42,14 @@ def get_observation(rockwalk_sub, object_param):
     return obs
 
 def transform_action_to_world_frame(obs, action_b):
-    """Transform actions from b frame to world frame"""
-    rot_psi = R.from_euler('z', obs[0]).as_matrix()
-    rot_init = R.from_euler('z', np.pi/2).as_matrix()
-    rot_theta = R.from_euler('y', obs[1]).as_matrix()
 
-    rot_sb = np.matmul(np.matmul(rot_psi, rot_init),rot_theta)
-
-    action_s = np.matmul(rot_sb,np.array([action_b[0], action_b[1], 0]))
+    rot_sb = get_rot_transform_s_b(obs)
+    vec_GC_s = get_vector_GC_s(obs, rot_sb)
+    rot_mat = compute_tangent_plane_transform_at_C(obs, vec_GC_s)
+    action_s = np.matmul(rot_mat,np.array([action_b[0], action_b[1], 0]))
 
     return action_s
+
 
 def main():
     """
@@ -78,7 +77,7 @@ def main():
         rate = rospy.Rate(freq)
         dt = 1/10.
         prev_speed = 0.
-        action_scale = 0.20
+        action_scale = 0.18
 
         while not rospy.is_shutdown():
             t_start = time.time()
