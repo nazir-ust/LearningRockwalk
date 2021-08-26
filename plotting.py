@@ -119,7 +119,7 @@ def main():
 
     data.plot_main()
 
-    load_model = LoadModel("./save/rw_model_3000000_steps")
+    load_model = LoadModel("./save/rw_model_1500000_steps")
     load_model.predict_action()
 
 

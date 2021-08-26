@@ -17,7 +17,7 @@ from scipy.spatial.transform import Rotation as R
 
 
 EPISODE_TIMEOUT = 5 #seconds
-DESIRED_NUTATION = np.radians(25) #degrees
+DESIRED_NUTATION = np.radians(55) #degrees
 
 
 class RockWalkEnv(gym.Env):
@@ -27,7 +27,7 @@ class RockWalkEnv(gym.Env):
         self._frame_skip = frame_skip
         self._isTrain = isTrain
 
-        self._object_param_file_path = "/home/abdullah/LearningRockwalk/single_object_robust/training_objects_params.txt"
+        self._object_param_file_path = "/home/abdullah/LearningRockwalk/single_object_robust_quadrotor/training_objects_params.txt"
         if self._isTrain==True:
             self._init_object_param = list(np.loadtxt(self._object_param_file_path, delimiter=',', skiprows=1, dtype=np.float64)[-1:].flatten())
         else:
@@ -130,7 +130,7 @@ class RockWalkEnv(gym.Env):
         action_accel = np.linalg.norm(action-np.array(self.prev_a))
         action_mag = np.linalg.norm(action)
 
-        if cone_state[3]<np.radians(15) or cone_state[3]>np.radians(35):
+        if cone_state[3]<np.radians(45) or cone_state[3]>np.radians(70):
             print("terminated: nutation out of bound")
             self.done = True
             reward = -50
