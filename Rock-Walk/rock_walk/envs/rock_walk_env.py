@@ -3,28 +3,47 @@ import math
 import time
 import numpy as np
 import pybullet as bullet
+
 import matplotlib.pyplot as plt
 
-from rock_walk.resources.cone import Cone
+# from rock_walk.resources.cone import Cone
+from rock_walk.resources.trainingObject import TrainObject
 from rock_walk.resources.eef import EndEffector
 from rock_walk.resources.plane import Plane
 from rock_walk.resources.goal import Goal
+from rock_walk.resources.controller import ExpertController
 
-import pkgutil
-# for rendering with bullet.ER_TINY_RENDERER
-# egl = pkgutil.get_loader('eglRenderer')
-# self._plugin = bullet.loadPlugin(egl.get_filename(), "_eglRendererPlugin")
+from scipy.spatial.transform import Rotation as R
+
+
+EPISODE_TIMEOUT = 5 #seconds
+DESIRED_NUTATION = np.radians(25) #degrees
 
 
 class RockWalkEnv(gym.Env):
 
-    def __init__(self, bullet_connection, step_freq, frame_skip):
-
+    def __init__(self, bullet_connection, step_freq, frame_skip, isTrain):
         self._bullet_connection = bullet_connection
         self._frame_skip = frame_skip
-        self._ep_timeout = 5.
-        self._mu_min = 0.2
-        self._mu_max = 2.0 #1.0
+        self._isTrain = isTrain
+
+        self._object_param_file_path = "/home/abdullah/LearningRockwalk/single_object_robust/training_objects_params.txt"
+        if self._isTrain==True:
+            self._init_object_param = list(np.loadtxt(self._object_param_file_path, delimiter=',', skiprows=1, dtype=np.float64)[-1:].flatten())
+        else:
+            radius=[0.35]
+            apex_coordinates=[-0.15,1.3]
+            self._init_object_param = radius + apex_coordinates
+
+        self.bullet_setup(self._bullet_connection)
+        bullet.setTimeStep(1./step_freq, self.clientID)
+
+        self.goal = Goal(self.clientID) # for visualizing the direction of transport.
+        self.plane = Plane(self.clientID) # support surface representing ground
+        self.cone = TrainObject(self.clientID)
+        self.cone.generate_object_mesh(ellipse_params=[self._init_object_param[0], self._init_object_param[0]],
+                                       apex_coordinates=[0, self._init_object_param[1], self._init_object_param[2]], density=10)
+        self.cone.generate_urdf_file()
 
         action_low = np.array([-1, -1], dtype=np.float64)
         action_high = np.array([1, 1], dtype=np.float64)
@@ -34,62 +53,70 @@ class RockWalkEnv(gym.Env):
         obs_high = np.array([5, 5, 5, 10, 10, 10], dtype=np.float64)
         self.observation_space = gym.spaces.box.Box(low=obs_low, high=obs_high)
 
-        self.bullet_setup(bullet_connection)
-        bullet.setTimeStep(1./step_freq, self.clientID)
-
         self.np_random, _ = gym.utils.seeding.np_random() #input seed eg. 0 for repeatability
         self.reset()
 
-
     def step(self, action):
-        action = action/self._action_scaling
 
         duration = time.time()-self.start_time
-        if duration > self._ep_timeout:
+        if duration > EPISODE_TIMEOUT:
             print("terminated: timout")
             self.done = True
 
-        self.eef.apply_action(action)
+        if self._isTrain==True:
+            data = np.loadtxt(self._object_param_file_path, delimiter=',', skiprows=1, dtype=np.float64)
+            object_param = list(data[-1,:])
+            action_scale = 0.25 #self._random_action_scale
+        else:
+            object_param = self._init_object_param
+            action_scale = 0.25
+
+        self.cone.apply_action(action*action_scale)
 
         for _ in range(self._frame_skip):
             bullet.stepSimulation()
 
-        true_eef_state = self.eef.get_observation()
-        true_cone_state = self.cone.get_observation()
+        true_cone_state, true_cone_te = self.cone.get_observation()
         noisy_cone_state = self.cone.get_noisy_observation(self.np_random)
 
-
-        reward = self.set_rewards(true_cone_state, true_eef_state)
+        reward = self.set_rewards(true_cone_state, true_cone_te, action*action_scale)
 
         if self._bullet_connection == 2:
             self.adjust_camera_pose()
 
-
         ob = np.array([noisy_cone_state[2], noisy_cone_state[3], noisy_cone_state[4],
                        noisy_cone_state[7], noisy_cone_state[8], noisy_cone_state[9]], dtype=np.float64)
-
 
         return ob, reward, self.done, dict()
 
 
     def reset(self):
-        self._mu_cone_ground = 0.5 #self.np_random.uniform(self._mu_min,self._mu_max)
-        self._action_scaling = 3 #self.np_random.uniform(1,5)
-        self._yaw_spawn = np.pi/2 + self.np_random.uniform(-np.pi/4, np.pi/4)
-
-
+        self.done = False
         bullet.resetSimulation(self.clientID)
         bullet.setGravity(0, 0, -9.8)
-        self.initialize_physical_objects()
-        self.done = False
+
+        if self._isTrain==True:
+            object_param = list(np.loadtxt(self._object_param_file_path, delimiter=',', skiprows=1, dtype=np.float64)[-1:].flatten())
+            yaw_spawn = np.pi/2 #+ self.np_random.uniform(-np.pi/4, np.pi/4)  #self.np_random.uniform(-np.pi, np.pi) #
+        else:
+            object_param = self._init_object_param
+            yaw_spawn = np.pi/2
+
+        mu_cone_ground = np.inf
+        self._random_action_scale = self.np_random.uniform(0.1, 1.0)
+        self.initialize_physical_objects(yaw_spawn, mu_cone_ground)
+
         self.start_time = time.time()
         if self._bullet_connection == 2:
             self.adjust_camera_pose()
 
-        true_cone_state = self.cone.get_observation()
+        true_cone_state, true_cone_te = self.cone.get_observation()
         noisy_cone_state = self.cone.get_noisy_observation(self.np_random)
 
         self.prev_x = [true_cone_state[0]]
+        self.prev_a = [0,0]
+        self.action_mag_sum = 0
+        self._prev_time = time.time()
 
         ob = np.array([noisy_cone_state[2], noisy_cone_state[3], noisy_cone_state[4],
                        noisy_cone_state[7], noisy_cone_state[8], noisy_cone_state[9]], dtype=np.float64)
@@ -97,92 +124,87 @@ class RockWalkEnv(gym.Env):
         return ob
 
 
-    def set_rewards(self, cone_state, eef_state):
+    def set_rewards(self, cone_state, cone_te, action):
 
-        if len(bullet.getClosestPoints(self._coneID, self._eefID, 0.03)) == 0:
-            print("terminated: end-effector off the cone")
+
+        action_accel = np.linalg.norm(action-np.array(self.prev_a))
+        action_mag = np.linalg.norm(action)
+
+        if cone_state[3]<np.radians(15) or cone_state[3]>np.radians(35):
+            print("terminated: nutation out of bound")
             self.done = True
             reward = -50
 
-        # elif abs(cone_state[2]-(-np.pi/2)) > np.pi/3:
-        #     print("terminated: yaw out of bound")
-        #     # self.done=True
-        #     reward = -50
-
-        # elif cone_state[3]<np.radians(10):
-        #     # print("terminated: cone almost upright")
-        #     # self.done=True
-        #     reward = -50
-        #
-        # elif abs(cone_state[4])>np.pi/2:
-        #     print("terminated: spin out of bound")
-        #     # self.done=True
-        #     reward = -50
-
-        elif cone_state[3]>np.radians(5) and abs(cone_state[4])>np.pi/2:
-                print("spin out of bound")
-                reward = -50
-
-
         else:
-            reward = 1000*max(cone_state[0]-self.prev_x[0],0)
-            self.prev_x = [cone_state[0]]
+
+            r_forward = 1000*(cone_state[0]-self.prev_x[0])
+            r_spin = -20*max(abs(cone_state[4])-np.pi/2, 0) #20
+            r_action_dot = -3*action_accel
+            # r_action_sum = -3*self.action_mag_sum
+
+            reward = r_forward + r_spin + r_action_dot
+
+        self.prev_x = [cone_state[0]]
+        self.prev_a = [action[0], action[1]]
+
 
         return reward
 
+    def initialize_physical_objects(self,yaw_spawn,mu_cone_ground):
+        self.goal.load_model_from_urdf()
 
-    def initialize_physical_objects(self):
-        Goal(self.clientID)
-        self.plane = Plane(self.clientID)
+        self.plane.load_model_from_urdf()
+        self.plane.load_texutre()
+        self.plane.set_lateral_friction(mu_cone_ground)
         self._planeID = self.plane.get_ids()[0]
-        self.plane.set_lateral_friction(self._mu_cone_ground)
 
-        self.cone = Cone(self.clientID, self._yaw_spawn)
+        self.cone.load_model_from_urdf(yaw_spawn)
+        self.cone.set_lateral_friction(mu_cone_ground)
         self._coneID = self.cone.get_ids()[0]
-        self.cone.set_lateral_friction(self._mu_cone_ground)
-
-        self.eef = EndEffector(self.clientID, self._yaw_spawn)
-        self._eefID = self.eef.get_ids()[0]
 
 
-        # init_theta = np.radians(25 + self.np_random.uniform(-5,5))
-        # self.initial_cone_tilting(theta_des=init_theta)
+        if self._isTrain==True:
+            self.initial_cone_tilting(theta_des=DESIRED_NUTATION)
+            pass
+        else:
+            self.initial_cone_tilting(theta_des=DESIRED_NUTATION)
+            pass
 
 
     def initial_cone_tilting(self, theta_des):
         theta = 0
-        # self.eef.speedl([0.5,0.,0.])
-        self.eef.speedl([0.5*np.sin(self._yaw_spawn),-0.5*np.cos(self._yaw_spawn),0.])
+        self.cone.apply_action([0.5,0])
         while theta < theta_des:
             bullet.stepSimulation()
-            cone_state = self.cone.get_observation()
+            cone_state = self.cone.get_observation()[0]
             theta = cone_state[3]
-        self.eef.speedl([0.,0.,0.])
+        self.cone.apply_action([0.,0.])
         bullet.stepSimulation()
-        print("Initial tilting done")
+        # print("Initial tilting done")
 
 
+    def bullet_setup(self, bullet_connection):
 
-    def move_eef_z(self, z_des, eef):
-
-        curr_pos = eef.get_observation()
-        curr_z = curr_pos[2]
-        eef.speedl([0.,0.,0.5])
-        while curr_z < z_des:
-            bullet.stepSimulation()
-            curr_pos = eef.get_observation()
-            curr_z = curr_pos[2]
-            # time.sleep(1./240.)
-        eef.speedl([0.,0.,0.])
-        bullet.stepSimulation()
+        if bullet_connection == 0:
+            self.clientID = bullet.connect(bullet.DIRECT)
+            # bullet.setDefaultContactERP(0.9)
+        elif bullet_connection == 1:
+            self.clientID = bullet.connect(bullet.GUI)
+        elif bullet_connection == 2:
+            self.clientID = bullet.connect(bullet.SHARED_MEMORY)
+            bullet.configureDebugVisualizer(bullet.COV_ENABLE_GUI,0)
+            self._cam_dist = 2.5 #3
+            self._cam_yaw = -20 + 90
+            self._cam_pitch = -45 + 15
+        bullet.setPhysicsEngineParameter(enableFileCaching=0)
 
 
     def adjust_camera_pose(self):
-        base_pos, _ = bullet.getBasePositionAndOrientation(self._coneID, self.clientID)
+        cone_pos_world = bullet.getLinkState(self._coneID,linkIndex=5,physicsClientId=self.clientID)[0]
         bullet.resetDebugVisualizerCamera(cameraDistance=self._cam_dist,
                                           cameraYaw=self._cam_yaw,
                                           cameraPitch=self._cam_pitch,
-                                          cameraTargetPosition=base_pos)
+                                          cameraTargetPosition=cone_pos_world)
 
     def render(self):
         # if mode == "human":
@@ -232,37 +254,9 @@ class RockWalkEnv(gym.Env):
         return [seed]
 
 
-    def bullet_setup(self, bullet_connection):
 
-        if bullet_connection == 0:
-            self.clientID = bullet.connect(bullet.DIRECT)
-            # bullet.setDefaultContactERP(0.9)
-        elif bullet_connection == 1:
-            self.clientID = bullet.connect(bullet.GUI)
-        elif bullet_connection == 2:
-            self.clientID = bullet.connect(bullet.SHARED_MEMORY)
-            bullet.configureDebugVisualizer(bullet.COV_ENABLE_GUI,0)
-            self._cam_dist = 2.0 #3
-            self._cam_yaw = -20 +90
-            self._cam_pitch = -45
-
-
-# elif cone_state[3]<1e-1:
-#     print("terminated: cone upright")
-#     self.done=True
-#     reward = -50
-
-# elif abs(cone_state[4])>np.pi/2:
-#     print("terminated: spin out of bound")
-#     self.done=True
-#     reward = -50
-
-
-# if self._count_z_action == 1:
-#     self.move_eef_z(z_des=action[2], eef=self.eef)
-#     self._count_z_action += 1
-#     print(action[2])
-
-
-
-# self.move_eef_z(z_des=1.2, eef=self.eef)
+# print("r_forward:", r_forward)
+# print("r_spin:", r_spin)
+# print("r_nutation:", r_nutation)
+# print("r_action_dot:", r_action_dot)
+# print("------------------------------")

@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<robot name="LargeCone">
+
+  <!-- Colors -->
+  <material name="brown">
+      <color rgba="0.87058824 0.72156863 0.52941176 1"/>
+  </material>
+
+  <link name="cone">
+    <inertial>
+      <mass value="1.04"/>
+      <!-- <mass value="1.80"/> -->
+      <origin xyz="0.033204 -0.247 0.71032"/>
+      <inertia ixx="0.063983" ixy="0.000624" ixz="0.000341" iyy="0.069601" iyz="0.000177" izz="0.011679"/>
+    </inertial>
+
+    <contact>
+      <lateral_friction value="0.4"/>
+      <!-- <rolling_friction value="0.001"/> -->
+      <!-- <stiffness value="30000"/> -->
+      <!-- <damping value="1000"/> -->
+    </contact>
+
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="mesh/moai_bm_scaled_down.obj"/>
+      </geometry>
+      <material name="brown"/>
+    </visual>
+
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="mesh/moai_bm_scaled_down_vhacd.obj"/>
+      </geometry>
+    </collision>
+
+  </link>
+
+</robot>

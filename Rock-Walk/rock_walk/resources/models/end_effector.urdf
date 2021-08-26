@@ -1,6 +1,10 @@
 <?xml version="1.0"?>
 <robot name="EndEffector">
 
+  <material name="white">
+      <color rgba="1 1 1 1"/>
+  </material>
+
   <link name="base_link">
     <inertial>
       <mass value="0.0001"/>
@@ -28,8 +32,8 @@
   <link name="eef_link">
     <inertial>
       <mass value="0.032"/>
-      <origin xyz="0.0 0.0 0.0"/>
-      <inertia ixx="18.193e-6" ixy="0." ixz="0." iyy="18.193e-6" iyz="0." izz="35.848e-6"/>
+      <origin xyz="55.729e-3 55.728e-3 0.0"/>
+      <inertia ixx="5173.902e-6" ixy="2886.877e-6" ixz="-2.704e-10" iyy="5173.846e-6" iyz="4.671e-10" izz="10057.277e-6"/>
     </inertial>
     <contact>
       <lateral_friction value="0.1"/>
@@ -40,13 +44,15 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="mesh/end_effector.obj"/>
+        <mesh filename="mesh/right_angle_eef.obj"/>
       </geometry>
+      <material name="white"/>
     </visual>
+
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="mesh/end_effector_vhacd.obj"/>
+        <mesh filename="mesh/right_angle_eef_vhacd.obj"/>
       </geometry>
     </collision>
   </link>

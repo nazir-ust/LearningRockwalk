@@ -1,0 +1,5 @@
+*.pyc
+log
+saved_models
+rockwalk_tb
+test_data

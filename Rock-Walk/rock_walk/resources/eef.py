@@ -5,16 +5,16 @@ import os
 from rock_walk.resources.utils import *
 
 class EndEffector:
-    def __init__(self, client, yaw_spawn):
+    def __init__(self, client, pos, orientation):
         self.clientID = client
-        f_name = os.path.join(os.path.dirname(__file__),
-                              'models/end_effector.urdf')
+        f_name = os.path.join(os.path.dirname(__file__),'models/end_effector.urdf')
 
 
-        base_position = [0.35*np.sin(yaw_spawn),-0.35*np.cos(yaw_spawn),1.20]
+        # base_position = [0,-0.3,1.50] # 1.20
 
         self.eefID = bullet.loadURDF(fileName=f_name,
-                                     basePosition=base_position,#[0.35,0.,1.20],#[0.,-0.35,1.20], #1.20 z
+                                     basePosition=pos,#[0.35,0.,1.20],#[0.,-0.35,1.20], #1.20 z
+                                     baseOrientation=bullet.getQuaternionFromEuler(orientation), #[0,0,np.radians(45)]),
                                      useFixedBase=1,
                                      physicsClientId=client)
 
@@ -44,6 +44,8 @@ class EndEffector:
         #                              controlMode=bullet.VELOCITY_CONTROL,
         #                              targetVelocity=action[2],
         #                              physicsClientId=self.clientID)
+
+
 
     def move_z(self, z_des):
         bullet.setJointMotorControl2(self.eefID,
